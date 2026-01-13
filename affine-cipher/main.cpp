@@ -4,6 +4,16 @@
 using namespace std;
 using pii = std::pair<int, int>;
 
+int n = 26;
+
+// Function to find inverse of x in Zn
+inline int findInverse(int x, int n) {
+    for (int i = 0; i < n; ++i) {
+        if ((i * x)%n == 1) return i;
+    }
+    return -1;
+}
+
 struct mapping {
 public:
     char from, to;
@@ -32,16 +42,130 @@ public:
     }
 };
 
+class AffineCipher {
+
+	char encrypt_char(char ch) {
+
+		if (ch > 'z' || ch < 'a') {
+			std::cout << "Unable to encrypt character: " << ch << "\n\tExpects only lowercase english alphabets\n";
+			return "";
+		}	
+
+		if (!key.exists()) {
+			std::cout << "Key required to encrypt the plaintext, please set a key first.\n";
+			return '0';
+		}
+
+		int char_ind = ch - 'a';
+		char encrypted = (key.a * char_ind + key.b) % n;
+		encrypted = encrypted + 'A';
+
+		return encrypted;
+	}
+
+	char decrypt_char(char ch) {
+
+		if (ch > 'Z' || ch < 'A') {
+			std::cout << "Unable to decrypt character: " << ch << "\n\tExpects only lowercase english alphabets\n";
+			return "";
+		}
+
+		if (!key.exists()) {
+			std::cout << "Key required to encrypt the plaintext, please set a key first.\n";
+			return '0';
+		}
+
+		int char_ind = ch - 'A';
+		char decrypted = (key.a_inv * (ch - key.b)) % n;
+		decrypted = decrypted + 'a';
+
+		return decrypted;
+	}
+
+public:
+
+	struct Key {
+
+		int a;
+		int b;
+		int a_inv;
+
+		Key() {}
+
+		Key(int _a, int _b) {
+			set(_a, _b);
+		}
+		
+		bool exists() {
+			return exists;
+		}
+
+		bool set(int _a, int _b) {
+
+			int _a_inv = findInverse(_a, n);
+
+			if (_a_inv == -1) {
+				std::cout << "Cannot set key.a = " << _a << "\n\tInverse won't exist in Z_26\n";
+				return false;
+			}
+
+			a = _a;
+			b = _b;
+			a_inv = _a_inv;
+			exists = true;
+			return true;
+		}
+
+		private:
+			bool exists = false;
+	}
+	
+	Key key;
+
+	std::string encrypt(std::string& plaintext) {
+		std::string encrypted;
+		encrypted.reserve(plaintext.length());	
+
+		for (char ch : plaintext) {
+			char ch_encrypted = encrypt_char(ch);
+			if (ch_encrypted == '0') return "";
+			encrypted.push_back(ch_encrypted);
+		}
+
+		return encrypted;
+	}
+
+	std::string decrypt(std::string& ciphertext) {
+		std::string decrypted;
+		decrypted.reserve(cipertext.length());
+
+		for (char ch : ciphertext) {
+			char ch_decrypted = decrypt_char(ch);
+			if (ch_decrypted = '0') return "";
+			decrypted.push_back(ch_decrypted);
+		}
+
+		return decrypted;
+	}
+
+	bool deduceKey(std::string plaintext, std::string ciphertext) {
+		
+		int string_length = plaintext.length();
+
+		if (ciphertext.length() != string.length()) {
+			cout << "Can't deduce the key. Lenghts of plaintext and ciphertext are different.\n";
+			return false;
+		}
+
+		mapping map1, map2;
+
+
+		return true;
+	}
+};
+
 inline void print_pair(pii p) {
     std::cout << "(" << p.first << ", " << p.second << ")\n";
-}
-
-// Function to find inverse of x in Zn
-inline int find_inverse(int x, int n) {
-    for (int i = 0; i < n; ++i) {
-        if ((i * x)%n == 1) return i;
-    }
-    return -1;
 }
 
 // Function to solve for pair (a,b) given two modular equations:
@@ -123,7 +247,6 @@ int main() {
 
     char most_frequent[4] = {'e', 't', 'a', 'o'};
     char most_frequent_ct[4] = {'Z', 'R', 'I', 'M'};
-    int n = 26;
 
     for (char c1 : most_frequent_ct) {
         for (char c2 : most_frequent_ct) {

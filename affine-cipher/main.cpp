@@ -41,7 +41,7 @@ public:
 
 	// Function to find inverse of x in Zn
 	inline int inverse(int x) {
-		for (int i = 0; i < n; ++i) {
+		for (int i = 1; i < n; ++i) {
 			if ((i * x)%n == 1) return i;
 		}
 		return -1;
@@ -61,19 +61,11 @@ public:
 
 		// Ensure inverse exists
 		if (x_inverse == -1) {
-			// std::cout << "Failed guess!!!\n";
 			return {-1, -1}; 
 		}
 
 		int a = (((((r1-r2)%n) + n)%n) * x_inverse)%n;
 		int b = (((r1 - a*x1)%n) + n)%n;
-
-		// Check if inverse of a keyExistsin Zn or not, because we need that while decryption. 
-		int a_inverse = inverse(a);
-
-		if (a_inverse == -1) {
-			return {-1, -1}; 
-		}
 
 		return {a, b};
 	}
@@ -110,7 +102,7 @@ class AffineCipher {
 		}
 
 		int char_ind = ch - 'A';
-		char decrypted = (key.a_inv * (ch - key.b)) % n;
+		char decrypted = (key.a_inv * (n + ((char_ind - key.b) % n))) % n;
 		decrypted = decrypted + 'a';
 
 		return decrypted;
@@ -195,7 +187,7 @@ public:
 		for (int i = 1; i < plaintext.length(); ++i) {
 			if (plaintext[i] == plaintext[i - 1]) continue;
 			keysFound = true;
-			pts = points(ciphertext[i] - 'A', plaintext[i] - 'a', ciphertext[i - 1] - 'A', plaintext[i - 1] - 'a');
+			pts = points(ciphertext[i], plaintext[i], ciphertext[i - 1], plaintext[i - 1]);
 		}
 
 		if (!keysFound) {

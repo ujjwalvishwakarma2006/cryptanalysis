@@ -1,245 +1,381 @@
-// Code to decrypt affine cipher. 
+// Affine Cipher Cryptanalysis Tool
+// Implements encryption, decryption, and frequency-based attack on affine ciphers
 
-#include <bits/stdc++.h>
-using pii = std::pair<int, int>;
+#include <iostream>
+#include <unordered_map>
+#include <optional>
+#include <string>
+#include <vector>
+#include <algorithm>
 
-int n = 26;
+// ============================================================================
+// Constants
+// ============================================================================
 
-struct mapping {
+constexpr int ALPHABET_SIZE = 26;
+
+// ============================================================================
+// ModularArithmetic: Handles all modular arithmetic operations
+// ============================================================================
+// Design Decision: Separate math operations from cipher logic
+// This makes the code testable and reusable
+
+class ModularArithmetic {
 public:
-    char from, to;
+    // Finds multiplicative inverse of 'a' in Z_n
+    // Returns std::nullopt if inverse doesn't exist
+    // Design: std::optional clearly signals "might not exist"
+    static std::optional<int> findModularInverse(int a, int modulus) {
+        // Normalize 'a' to be positive
+        a = ((a % modulus) + modulus) % modulus;
+        
+        for (int i = 1; i < modulus; ++i) {
+            if ((i * a) % modulus == 1) {
+                return i;
+            }
+        }
+        return std::nullopt;
+    }
 
-	mapping () {}
+    // Performs modular subtraction ensuring positive result
+    // Design: Helper function to avoid repetitive modulo arithmetic
+    static int subtract(int a, int b, int modulus) {
+        return ((a - b) % modulus + modulus) % modulus;
+    }
 
-    mapping(char _from, char _to) {
-        from = _from;
-        to = _to;
+    // Performs modular addition
+    static int add(int a, int b, int modulus) {
+        return (a + b) % modulus;
+    }
+
+    // Performs modular multiplication
+    static int multiply(int a, int b, int modulus) {
+        return (a * b) % modulus;
     }
 };
 
-struct points {
-public:
-    mapping first, second;
+// ============================================================================
+// AffineKey: Represents the key pair (a, b) for affine cipher
+// ============================================================================
+// Design Decision: Encapsulate key validation and inverse calculation
+// This ensures keys are always in a valid state
 
-	points() {}
+struct AffineKey {
+    int a;          // Multiplicative component (must be coprime with 26)
+    int b;          // Additive component
+    int a_inverse;  // Cached inverse of 'a' for decryption
+	bool valid;		// `true` if key is set
 
-    points(char c1, char p1, char c2, char p2) : first(p1, c1), second(p2, c2) {} 
+    AffineKey(int a_val, int b_val, int a_inv) 
+        : a(a_val), b(b_val), a_inverse(a_inv) {}
 
-    void print() {
-		std::cout << first.from << "->" << first.to << 
-            "\t" << second.from << "->" << second.to
-            << "\n";
+    // Factory method: Creates key only if valid
+    // Design: Static factory pattern ensures object invariants
+    static std::optional<AffineKey> create(int a, int b) {
+        auto inverse = ModularArithmetic::findModularInverse(a, ALPHABET_SIZE);
+        
+        if (!inverse) {
+            return std::nullopt;  // 'a' has no inverse
+        }
+        
+        return AffineKey(a, b, *inverse);
+    }
+
+    void print() const {
+        std::cout << "Key: a=" << a << ", b=" << b 
+                  << " (a^-1=" << a_inverse << ")\n";
     }
 };
 
-class Group {
-	int n = 26;
-public:
+// ============================================================================
+// KnownPlaintextPair: Represents two known plaintext-ciphertext mappings
+// ============================================================================
+// Design Decision: Clear name shows this is for known-plaintext attack
+// Used to solve the system of linear equations for affine parameters
 
-	Group() {}
-	Group(int _n) : n(_n) {}
+struct KnownPlaintextPair {
+    char plaintext1, ciphertext1;
+    char plaintext2, ciphertext2;
 
-	// Function to find inverse of x in Zn
-	inline int inverse(int x) {
-		for (int i = 1; i < n; ++i) {
-			if ((i * x)%n == 1) return i;
-		}
-		return -1;
-	}
-	
-	// Function to solve for pair (a,b) given two modular equations:
-	// ax1 + b = r1 mod n and ax2 + b = r2 mod n
-	// where a, b, x1, x2, r1, r2 belongs to Zn
-	// Specifically a belongs to Zn*
-	inline pii find_a_b(points map) {
-		int x1 = map.first.from - 'a';
-		int x2 = map.second.from - 'a';
-		int r1 = map.first.to - 'A';
-		int r2 = map.second.to - 'A';
-		int x = ((((x1-x2)%n) + n)%n);
-		int x_inverse = inverse(x);
+    KnownPlaintextPair(char p1, char c1, char p2, char c2)
+        : plaintext1(p1), ciphertext1(c1), plaintext2(p2), ciphertext2(c2) {}
 
-		// Ensure inverse exists
-		if (x_inverse == -1) {
-			return {-1, -1}; 
-		}
+    void print() const {
+        std::cout << "Known pairs: " 
+                  << plaintext1 << "->" << ciphertext1 << ", "
+                  << plaintext2 << "->" << ciphertext2 << "\n";
+    }
 
-		int a = (((((r1-r2)%n) + n)%n) * x_inverse)%n;
-		int b = (((r1 - a*x1)%n) + n)%n;
-
-		return {a, b};
-	}
+    // Validates that the pair provides useful information
+    bool isValid() const {
+        return plaintext1 != plaintext2;  // Must be distinct
+    }
 };
+
+// ============================================================================
+// AffineCipher: Core cipher implementation
+// ============================================================================
+// Design Decision: Focuses solely on encryption/decryption mechanics
+// Cryptanalysis is handled by separate class
 
 class AffineCipher {
-	char encrypt_char(char ch) {
-		if (ch > 'z' || ch < 'a') {
-			std::cout << "Unable to encrypt character: " << ch << "\n\tExpects only lowercase english alphabets\n";
-			return '0';
-		}	
+private:
+    std::optional<AffineKey> key_;
 
-		if (!key.exists()) {
-			std::cout << "Key required to encrypt the plaintext, please set a key first.\n";
-			return '0';
-		}
+    // Helper: Encrypts single character
+    // Design: Private helper keeps public API clean
+    std::optional<char> encryptChar(char ch) const {
+        if (!key_) {
+            return std::nullopt;
+        }
 
-		int char_ind = ch - 'a';
-		char encrypted = (key.a * char_ind + key.b) % n;
-		encrypted = encrypted + 'A';
+        if (ch < 'a' || ch > 'z') {
+            return std::nullopt;  // Invalid input
+        }
 
-		return encrypted;
-	}
+        int index = ch - 'a';
+        int encrypted_index = ModularArithmetic::add(
+            ModularArithmetic::multiply(key_->a, index, ALPHABET_SIZE),
+            key_->b,
+            ALPHABET_SIZE
+        );
+        
+        return static_cast<char>('A' + encrypted_index);
+    }
 
-	char decrypt_char(char ch) {
-		if (ch > 'Z' || ch < 'A') {
-			std::cout << "Unable to decrypt character: " << ch << "\n\tExpects only lowercase english alphabets\n";
-			return '0';
-		}
+    // Helper: Decrypts single character
+    std::optional<char> decryptChar(char ch) const {
+        if (!key_) {
+            return std::nullopt;
+        }
 
-		if (!key.exists()) {
-			std::cout << "Key required to encrypt the plaintext, please set a key first.\n";
-			return '0';
-		}
+        if (ch < 'A' || ch > 'Z') {
+            return std::nullopt;
+        }
 
-		int char_ind = ch - 'A';
-		char decrypted = (key.a_inv * (n + ((char_ind - key.b) % n))) % n;
-		decrypted = decrypted + 'a';
-
-		return decrypted;
-	}
+        int index = ch - 'A';
+        int shifted = ModularArithmetic::subtract(index, key_->b, ALPHABET_SIZE);
+        int decrypted_index = ModularArithmetic::multiply(
+            key_->a_inverse,
+            shifted,
+            ALPHABET_SIZE
+        );
+        
+        return static_cast<char>('a' + decrypted_index);
+    }
 
 public:
-	struct Key {
-		Group* G = new Group();
-		int a;
-		int b;
-		int a_inv;
+    AffineCipher() = default;
 
-		Key() {}
+    // Constructor with key
+    explicit AffineCipher(const AffineKey& key) : key_(key) {}
 
-		Key(int _a, int _b) {
-			set(_a, _b);
-		}
-		
-		bool exists() {
-			return keyExists;
-		}
+    // Sets encryption/decryption key
+    bool setKey(int a, int b) {
+        key_ = AffineKey::create(a, b);
+        return key_.has_value();
+    }
 
-		bool set(int _a, int _b) {
-			int _a_inv = G->inverse(_a);
+    bool hasKey() const {
+        return key_.has_value();
+    }
 
-			if (_a_inv == -1) {
-				std::cout << "\tCannot set key.a = " << _a << "\n\tInverse won't exist in Z_26\n";
-				return false;
-			}
+    const AffineKey& getKey() const {
+        return *key_;
+    }
 
-			a = _a;
-			b = _b;
-			a_inv = _a_inv;
-			keyExists= true;
-			return true;
-		}
+    // Encrypts plaintext (lowercase) to ciphertext (uppercase)
+    std::optional<std::string> encrypt(const std::string& plaintext) const {
+        if (!key_) {
+            std::cerr << "Error: No key set for encryption\n";
+            return std::nullopt;
+        }
 
-		private:
-			bool keyExists= false;
-	};
-	
-	Key key;
+        std::string ciphertext;
+        ciphertext.reserve(plaintext.length());
 
-	AffineCipher() {}
+        for (char ch : plaintext) {
+            auto encrypted = encryptChar(ch);
+            if (!encrypted) {
+                std::cerr << "Error: Invalid character '" << ch 
+                          << "' in plaintext\n";
+                return std::nullopt;
+            }
+            ciphertext.push_back(*encrypted);
+        }
 
-	std::string encrypt(std::string& plaintext) {
-		std::string encrypted;
-		encrypted.reserve(plaintext.length());	
+        return ciphertext;
+    }
 
-		for (char ch : plaintext) {
-			char ch_encrypted = encrypt_char(ch);
-			if (ch_encrypted == '0') return "";
-			encrypted.push_back(ch_encrypted);
-		}
+    // Decrypts ciphertext (uppercase) to plaintext (lowercase)
+    std::optional<std::string> decrypt(const std::string& ciphertext) const {
+        if (!key_) {
+            std::cerr << "Error: No key set for decryption\n";
+            return std::nullopt;
+        }
 
-		return encrypted;
-	}
+        std::string plaintext;
+        plaintext.reserve(ciphertext.length());
 
-	std::string decrypt(std::string& ciphertext) {
-		std::string decrypted;
-		decrypted.reserve(ciphertext.length());
+        for (char ch : ciphertext) {
+            auto decrypted = decryptChar(ch);
+            if (!decrypted) {
+                std::cerr << "Error: Invalid character '" << ch 
+                          << "' in ciphertext\n";
+                return std::nullopt;
+            }
+            plaintext.push_back(*decrypted);
+        }
 
-		for (char ch : ciphertext) {
-			char ch_decrypted = decrypt_char(ch);
-			if (ch_decrypted == '0') return "";
-			decrypted.push_back(ch_decrypted);
-		}
-
-		return decrypted;
-	}
-
-	bool deduceKey(std::string plaintext, std::string ciphertext) {
-		int string_length = plaintext.length();
-
-		if (ciphertext.length() != plaintext.length()) {
-			std::cout << "Can't deduce the key. Lenghts of plaintext and ciphertext are different.\n";
-			return false;
-		}
-
-		points pts;
-		bool keysFound = false;
-		for (int i = 1; i < plaintext.length(); ++i) {
-			if (plaintext[i] == plaintext[i - 1]) continue;
-			keysFound = true;
-			pts = points(ciphertext[i], plaintext[i], ciphertext[i - 1], plaintext[i - 1]);
-		}
-
-		if (!keysFound) {
-			std::cout << "Can't deduce the key. Insufficient information from the given plaintext-ciphertext pair.\n";
-			return false;
-		}
-
-		auto p = key.G->find_a_b(pts);
-		if (key.set(p.first, p.second) == false) {
-			// std::cout << "\tCan't deduce the key. Inverse doesn't exist.\n";
-			return false;
-		}
-
-		return true;
-	}
+        return plaintext;
+    }
 };
 
-int main() {
-	AffineCipher af;
+// ============================================================================
+// AffineCryptanalysis: Handles breaking the cipher
+// ============================================================================
+// Design Decision: Separate cryptanalysis from cipher implementation
+// This follows SRP and makes the code easier to extend
 
-    // ciphertext need to be decrypted.
-    std::string ciphertext = "HYVFMRIGJXHMZBTRIZVZUZMHYOZKRURIRFUXFKHMRIGJZIRDQMFDZXXZX";
-    std::unordered_map<char, int> char_freq;
-    
-    for (char c : ciphertext) char_freq[c]++;
-    for (auto [letter, count] : char_freq) std::cout << letter << ": " << count << "\n";
-    // Highest frequencies
-    // Z: 8
-    // R: 7
-    // I: 5 
-    // M: 5 
-    // X: 5
+class AffineCryptanalysis {
+public:
+    // Solves for affine parameters (a, b) given two known plaintext-ciphertext pairs
+    // Solves the system: a*x1 + b ≡ y1 (mod 26) and a*x2 + b ≡ y2 (mod 26)
+    // Returns std::nullopt if no valid solution exists
+    static std::optional<AffineKey> solveAffineParameters(
+        const KnownPlaintextPair& pair
+    ) {
+        if (!pair.isValid()) {
+            return std::nullopt;
+        }
 
-    // Frequency analysis (assuming a -> 0 and z -> 25)
-    char most_frequent[4] = {'e', 't', 'a', 'o'};
-    char most_frequent_ct[4] = {'Z', 'R', 'I', 'M'};
+        // Convert characters to numeric indices
+        int x1 = pair.plaintext1 - 'a';
+        int x2 = pair.plaintext2 - 'a';
+        int y1 = pair.ciphertext1 - 'A';
+        int y2 = pair.ciphertext2 - 'A';
 
-    for (char c1 : most_frequent_ct) {
-        for (char c2 : most_frequent_ct) {
-			if (c1 == c2) continue;
-            for (char p1 : most_frequent) {
-                for (char p2 : most_frequent) {
-                    if (p1 == p2) continue;
-					std::string from_plaintext = std::string(1, p1) + p2;
-					std::string to_ciphertext = std::string(1, c1) + c2;
-					std::cout << from_plaintext << " -> " << to_ciphertext << "\n";
-					if (!af.deduceKey(from_plaintext, to_ciphertext)) continue;
-					std::string decrypted = af.decrypt(ciphertext);
-					std::cout << decrypted << "\n"; 
+        // Solve: a*(x1-x2) ≡ (y1-y2) (mod 26)
+        int x_diff = ModularArithmetic::subtract(x1, x2, ALPHABET_SIZE);
+        auto x_diff_inverse = ModularArithmetic::findModularInverse(
+            x_diff, ALPHABET_SIZE
+        );
+
+        if (!x_diff_inverse) {
+            return std::nullopt;  // No solution exists
+        }
+
+        int y_diff = ModularArithmetic::subtract(y1, y2, ALPHABET_SIZE);
+        int a = ModularArithmetic::multiply(y_diff, *x_diff_inverse, ALPHABET_SIZE);
+
+        // Solve: b ≡ y1 - a*x1 (mod 26)
+        int b = ModularArithmetic::subtract(
+            y1,
+            ModularArithmetic::multiply(a, x1, ALPHABET_SIZE),
+            ALPHABET_SIZE
+        );
+
+        return AffineKey::create(a, b);
+    }
+
+    // Performs frequency analysis attack on ciphertext
+    // Tries different mappings of frequent ciphertext letters to frequent plaintext letters
+    static std::vector<std::string> frequencyAttack(
+        const std::string& ciphertext,
+        const std::vector<char>& likely_plaintext_chars = {'e', 't', 'a', 'o'},
+        int max_results = 5
+    ) {
+        // Step 1: Frequency analysis
+        auto frequent_ciphertext = getFrequentCharacters(ciphertext, likely_plaintext_chars.size());
+
+        std::cout << "Frequent ciphertext characters: ";
+        for (char c : frequent_ciphertext) std::cout << c << " ";
+        std::cout << "\n\n";
+
+        // Step 2: Try different mappings
+        std::vector<std::string> candidates;
+        AffineCipher cipher;
+
+        for (char c1 : frequent_ciphertext) {
+            for (char c2 : frequent_ciphertext) {
+                if (c1 == c2) continue;
+
+                for (char p1 : likely_plaintext_chars) {
+                    for (char p2 : likely_plaintext_chars) {
+                        if (p1 == p2) continue;
+
+                        KnownPlaintextPair pair(p1, c1, p2, c2);
+                        auto key = solveAffineParameters(pair);
+
+                        if (!key) continue;
+
+                        cipher = AffineCipher(*key);
+                        auto decrypted = cipher.decrypt(ciphertext);
+
+                        if (decrypted) {
+                            candidates.push_back(*decrypted);
+                            
+                            if (candidates.size() >= max_results) {
+                                return candidates;
+                            }
+                        }
+                    }
                 }
             }
         }
+
+        return candidates;
+    }
+
+private:
+    // Analyzes character frequency in text
+    static std::vector<char> getFrequentCharacters(
+        const std::string& text,
+        size_t count
+    ) {
+        std::unordered_map<char, int> freq;
+        
+        for (char c : text) {
+            freq[c]++;
+        }
+
+        // Sort by frequency
+        std::vector<std::pair<char, int>> freq_vec(freq.begin(), freq.end());
+        std::sort(freq_vec.begin(), freq_vec.end(),
+            [](const auto& a, const auto& b) {
+                return a.second > b.second;  // Descending order
+            });
+
+        // Extract top characters
+        std::vector<char> result;
+        for (size_t i = 0; i < std::min(count, freq_vec.size()); ++i) {
+            result.push_back(freq_vec[i].first);
+        }
+
+        return result;
+    }
+};
+
+// ============================================================================
+// Main: Demonstrates usage
+// ============================================================================
+
+int main() {
+    std::cout << "===== Affine Cipher Cryptanalysis =====\n\n";
+
+    const std::string ciphertext = 
+        "HYVFMRIGJXHMZBTRIZVZUZMHYOZKRURIRFUXFKHMRIGJZIRDQMFDZXXZX";
+
+    std::cout << "Ciphertext: " << ciphertext << "\n\n";
+
+    // Perform frequency attack
+    std::cout << "Performing frequency analysis attack...\n";
+    auto candidates = AffineCryptanalysis::frequencyAttack(ciphertext, {'e', 't', 'a', 'o'}, 10);
+
+    std::cout << "\nPossible plaintexts:\n";
+    std::cout << "----------------------------------------\n";
+    for (size_t i = 0; i < candidates.size(); ++i) {
+        std::cout << i + 1 << ". " << candidates[i] << "\n";
     }
 
     return 0;

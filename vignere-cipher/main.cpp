@@ -1,3 +1,5 @@
+// This file implements Kasiski's test to decipher a given ciphertext that was enciphered using vigenere cipher.
+
 #include <iostream>
 #include <vector>
 #include <algorithm>
@@ -5,7 +7,7 @@
 #include <print> // Using C++ 23 (:
 #include <optional>
 
-class SubstitutionCipher {
+class VigenereCipher {
 public:
 	// Maps to store key and inverse key. 
 	std::unordered_map<char, char> key;
@@ -108,9 +110,8 @@ void printFrequenciesSorted(std::unordered_map<std::string, int> freqMap, int co
 }
 
 int main() {
-	std::string ciphertext = "RABXDPSTJXQSFPPFQEJVSXPGSMCMPSLPGSFPPFQESXJXFWVSXMFXCPXRSMFIIHJMMRBISESCMDAPRIRPTRAWMPGSQJXXSQPESCPGSFPPFQESXMSISQPMPGSESCPJPXCXFAWJLICFMMDLRANPGFPPGSFPPFQESXQFAWRMPRANDRMGPGSQJXXSQPFAWPGSRAQJXXSQPESCFTPSXPXRFIMJASPGRANRYJDIWIRESPJLSAPRJARMPGFPPXCRANHFMMYJXWMJTMJLSJASMFQQJDAPRMAJPFBXDPSTJXQSFPPFQEPGFPRMUDMPGRPPXRFIRAPGSBXDPSTJXQSFPPFQEYSTJQDMJAPGSESCNSASXFPSWTJXPGSSAQXCHPRJAFINJXRPGL";
+	std::string ciphertext = "qwgbnnkywgbonsaqcjkbjbrorhjhnonzglxmlmmnxsqvrbochmqrxycyaqrfjbucxdkprqxrqaaaqzghpkojqqobnluuydawbixrvjwwozhvbnbubdqxpnufkdoadcorlmwcynodxhbewqntjjiqwgbnnkyyhopdqxpzzdrdqhujyxcbdsfxuunonzglxmlmppqqfsqlyniewqxjbqowhljbyzszowubqorryqqevdfwwtyrmxzlbmllqkkumxslxjxzfgxewiexfdabjuqfqdjjfkdvyjdefziajdpdqbidstizppnhfkzkacxqudri";
 
-	SubstitutionCipher sc;
 	std::unordered_map<std::string, int> monogram, digram, trigram;
 
 	// Populate monogram, digram, and trigram frequencies for frequency analysis.
@@ -122,33 +123,5 @@ int main() {
 	printFrequenciesSorted(digram, 11);
 	printFrequenciesSorted(trigram, 9);
 	
-	// Performing Frequency Analysis based on statistical data of the English Language.
-	// Also, seeing the incremental changes after deciphering. 
-	sc.addDecryptAndPrint('t', 'P', ciphertext);
-	sc.addDecryptAndPrint('e', 'S', ciphertext);
-	sc.addDecryptAndPrint('h', 'G', ciphertext);
-	sc.addDecryptAndPrint('a', 'F', ciphertext);
-	sc.addDecryptAndPrint('c', 'Q', ciphertext);
-	sc.addDecryptAndPrint('k', 'E', ciphertext);
-	sc.addDecryptAndPrint('r', 'X', ciphertext);
-	sc.addDecryptAndPrint('o', 'J', ciphertext);
-	sc.addDecryptAndPrint('b', 'B', ciphertext);
-	sc.addDecryptAndPrint('u', 'D', ciphertext);
-	sc.addDecryptAndPrint('i', 'R', ciphertext);
-	sc.addDecryptAndPrint('n', 'A', ciphertext);
-	sc.addDecryptAndPrint('f', 'T', ciphertext);
-	sc.addDecryptAndPrint('d', 'W', ciphertext);
-	sc.addDecryptAndPrint('v', 'V', ciphertext);
-	sc.addDecryptAndPrint('s', 'M', ciphertext);
-	sc.addDecryptAndPrint('y', 'C', ciphertext);
-	sc.addDecryptAndPrint('m', 'L', ciphertext);
-	sc.addDecryptAndPrint('l', 'I', ciphertext);
-	sc.addDecryptAndPrint('p', 'H', ciphertext);
-	sc.addDecryptAndPrint('g', 'N', ciphertext);
-	sc.addDecryptAndPrint('w', 'Y', ciphertext);
-	sc.addDecryptAndPrint('j', 'U', ciphertext);
-
-	auto test = sc.encrypt("thisisgreatz"); // Error
-	if (test != std::nullopt) std::println("{}", *test); 
 	return 0;
 }

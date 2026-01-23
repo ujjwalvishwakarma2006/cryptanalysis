@@ -215,7 +215,7 @@ public:
 		std::vector<double> iocs(keyLength);
 		int ctLength = ciphertext.size();
 		for (int i = 0; i < std::min(keyLength, ctLength); ++i) {
-			for (int k = i; k < ctLength - keyLength; k += keyLength) {
+			for (int k = i; k < ctLength; k += keyLength) {
 				binFreq[i][ciphertext[k] - 'a'] += 1;
 			}
 		}

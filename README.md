@@ -45,7 +45,9 @@ The `AffineCryptanalysis` class is at the highest abstraction level.
 - **`getDeltas`** - Finds spacing between repeated phrases in the ciphertext
 - **`deduceKeyLength`** - Determines the key length based on an array of deltas
 - **`calculateMgs`** - For a given position in the key, calculates $M_g$ for all possible characters to identify the correct one
+
 $$M_g = \sum_{i=1}^{\text{keyLength}} \frac {p_i f_i} {\text{binLength}}$$
+
 - **`findKey`** - Iterates through each position in the key, calling `calculateMgs` to determine each character
 
 > **Tip**: The term $M_g$ comes from Douglas Stinson's *Cryptography Theory and Practice*. Section 2.2.3 provides a detailed explanation with a full worked example of decrypting the Vigenere Cipher. [Recommended Reading]

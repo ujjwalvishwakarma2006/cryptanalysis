@@ -13,6 +13,7 @@ You have to monitor the output at each step.
 The repository is organized into cipher-specific directories:
 - `affine-cipher/` - Implementation and breaking of Affine Cipher
 - `substitution-cipher/` - Implementation and breaking of Substitution Cipher
+- `vigenere-cipher/` - Implementation and breaking of Vigenere Cipher
 
 ## 1. Affine Cipher
 
@@ -27,7 +28,6 @@ The `AffineCryptanalysis` class is at the highest abstraction level.
 - **`solveAffineParameters`**: Tries to deduce the key based on a given `KnownPlaintextPair`
 - **`frequencyAttack`**: Performs [Known-plaintext attack](https://en.wikipedia.org/wiki/Known-plaintext_attack) over a given ciphertext
 
-
 ## 2. Substitution Cipher
 
 [This file](./substitution-cipher/main.cpp) implements the `SubstitutionCipher` class. There wasn't much to automate here, and the cryptanalyst is requested to use their own brain. It implements the following:
@@ -35,6 +35,20 @@ The `AffineCryptanalysis` class is at the highest abstraction level.
 - **`addKey`** - Adds keys to the permutation on an incremental basis
 - **`encrypt`** - Encrypts plaintext based on the key (won't work if the key isn't set for a character in the plaintext)
 - **`decrypt`** - Decrypts the ciphertext (will decrypt as `-` if the key isn't present for a character)
+
+## 3. Vigenere Cipher
+
+[This file](./vigenere-cipher/main.cpp) implements the `VigenereCipher` class. This cipher can be fully automated and will produce correct results with high probability. However, monitor the output to verify the results. The class provides the following main functions:
+
+- **`encrypt`** - Encrypts plaintext based on the key (key must be set beforehand using the `setKey` method)
+- **`decrypt`** - Decrypts ciphertext (key must be set beforehand using the `setKey` method)
+- **`getDeltas`** - Finds spacing between repeated phrases in the ciphertext
+- **`deduceKeyLength`** - Determines the key length based on an array of deltas
+- **`calculateMgs`** - For a given position in the key, calculates $M_g$ for all possible characters to identify the correct one
+$$M_g = \sum_{i=1}^{\text{keyLength}} \frac {p_i f_i} {\text{binLength}}$$
+- **`findKey`** - Iterates through each position in the key, calling `calculateMgs` to determine each character
+
+> **Tip**: The term $M_g$ comes from Douglas Stinson's *Cryptography Theory and Practice*. Section 2.2.3 provides a detailed explanation with a full worked example of decrypting the Vigenere Cipher. [Recommended Reading]
 
 ## Usage
 

@@ -41,12 +41,12 @@ void printFrequenciesSorted(std::unordered_map<std::string, int> freqMap, int co
 
 class VigenereCipher {
 	std::optional<std::vector<double>> prob;		// expected probability of each character
-	std::optional<std::string> key, freqFile = "frequencies.txt";
+	std::optional<std::string> key, probabilitiesFile = "frequencies.txt";
 
 	bool addProb(std::string chAndProb, std::vector<double>& tempProb) {
 		char ch = chAndProb[0];
 		if (ch < 'a' || ch > 'z') {
-			std::println(stderr, "Error: {} should consist only lowercase english alphabets.", *freqFile);
+			std::println(stderr, "Error: {} should consist only lowercase english alphabets.", *probabilitiesFile);
 			return false;
 		}
 		double chProb = std::stod(chAndProb.substr(2, chAndProb.length() - 2));
@@ -56,12 +56,12 @@ class VigenereCipher {
 
 public:
 	VigenereCipher() {
-		std::ifstream inFile(*freqFile);
+		std::ifstream inFile(*probabilitiesFile);
 		std::string chAndProb;
 		std::vector<double> tempProb(26, 0);
-		while (getline(inFile, chAndProb)) {
+		while (std::getline(inFile, chAndProb)) {
 			if (!addProb(chAndProb, tempProb)) {
-				std::println("Warning: Object initialized, but {} is not in the required format.", *freqFile);
+				std::println("Warning: Object initialized, but {} is not in the required format.", *probabilitiesFile);
 				return;
 			}
 		}
@@ -126,12 +126,12 @@ public:
 		for (auto phrase : phrases) {
 			auto firstOccurrence = ciphertext.find(phrase, 0);
 			if (firstOccurrence == std::string::npos) {
-				std::println(stderr, "Error: target phrase {} not found in ciphertext", phrase);
+				std::println(stderr, "Error: firstOccurance of target phrase {} not found in ciphertext", phrase);
 				return std::nullopt;
 			}
 			auto secondOccurrence = ciphertext.find(phrase, firstOccurrence + 1);
 			if (secondOccurrence == std::string::npos) {
-				std::println(stderr, "Error: target phrase {} not found in ciphertext", phrase);
+				std::println(stderr, "Error: secondOccurance of target phrase {} not found in ciphertext", phrase);
 				return std::nullopt;
 			}
 			deltas.push_back(secondOccurrence - firstOccurrence);
@@ -173,21 +173,24 @@ public:
 		return m;
 	}
 		
-	void calculateMgs(std::vector<int> bin, int binNumber, int cols = 9) {
+	std::optional<char> calculateMgs(std::vector<int> bin, int binNumber, int cols = 9) {
 		// This function calculates and prints difference values of Mg's for a given bin
 		// By observing those values of those Mg's, we can find the character of the key
 		// corresponding to the provided bin. 
 		if (bin.size() != 26) {
 			std::println(stderr, "Error: bin size must be equal to 26");
-			return;
+			return std::nullopt;
 		}
 		if (!prob) {
 			std::println(stderr, "Error: expected frequencies not set.");
-			return;
+			return std::nullopt;
 		}
 		
 		std::println("Mg values for bin {}", binNumber);
 		int totalChars = std::accumulate(bin.begin(), bin.end(), 0);
+		char mostProbableChar = 'a';
+		double mostProbability = 0;
+
 		// Looping over possible values of binNumber'th character of the key
 		// And for each, calculating Mg's
 		int printed = cols;
@@ -203,16 +206,20 @@ public:
 				printed = cols;
 				std::println();
 			} 
+			if (mg > mostProbability) {
+				mostProbability = mg;
+				mostProbableChar = ch;
+			}
 		}
 
 		std::println();
 		std::println();
+		return mostProbableChar;
 	}
 	
-	std::vector<double> findKey(std::string ciphertext, int keyLength) {
+	std::optional<std::string> findKey(std::string ciphertext, int keyLength) {
 		std::vector<std::vector<int>> binFreq(keyLength, std::vector<int>(26, 0));
 		// binFreq[i][j] denotes the frequency of j'th character in i'th bin
-		std::vector<double> iocs(keyLength);
 		int ctLength = ciphertext.size();
 		for (int i = 0; i < std::min(keyLength, ctLength); ++i) {
 			for (int k = i; k < ctLength; k += keyLength) {
@@ -220,17 +227,16 @@ public:
 			}
 		}
 
+		std::string deducedKey;
+		deducedKey.reserve(keyLength);
 		for (int i = 0; i < keyLength; ++i) {
-			int totalBinChars = std::accumulate(binFreq[i].begin(), binFreq[i].end(), 0);
-			iocs[i] = 0;
-			for (int j = 0; j < 26; ++j) {
-				iocs[i] += binFreq[i][j] * binFreq[i][j];
-			}
-			iocs[i] /= totalBinChars * totalBinChars;
-			calculateMgs(binFreq[i], i);
+			// i-th character of key (ki)
+			auto ki = calculateMgs(binFreq[i], i);
+			if (!ki) return std::nullopt;
+			deducedKey.push_back(*ki);
 		}
 
-		return iocs;
+		return deducedKey;
 	}
 
 };
@@ -271,8 +277,8 @@ int main() {
 	auto m4 = vc.deduceKeyLength(*deltas4, 5);
 	std::println("Expected Key Length found: {}", *m4);
 
-	vc.findKey(ciphertext, 7);
-	vc.setKey("mdzxwjq");
+	auto deducedKey = vc.findKey(ciphertext, 7);
+	if (deducedKey) vc.setKey("mdzxwjq");
 	auto plaintext = vc.decrypt(ciphertext);
 	if (plaintext) {
 		std::println("Decrypted text: ");
